@@ -107,11 +107,6 @@ def weighted_img(img, initial_img, α=0.8, β=1., λ=0.):
 
 
 def process_image(image):
-    # NOTE: The output you return should be a color image (3 channel)
-    # for processing video below
-    # TODO: put your pipeline here,
-    # you should return the final output (image where lines are drawn on lanes)
-
     # Get the image size
     imshape = image.shape
 
@@ -122,8 +117,8 @@ def process_image(image):
 
     # Image make parameters
     vertices = np.array([[(150, imshape[0]),
-                          (450, 310),
-                          (490, 310),
+                          (450, 320),
+                          (490, 320),
                           (900, imshape[0])]],
                         dtype=np.int32)
     # Hough transform parameters
@@ -150,13 +145,13 @@ def process_image(image):
     return result
 
 
-# solidWhiteRight
-# solidWhiteCurve
-# solidYellowCurve
-# solidYellowCurve2
-# solidYellowLeft
-# whiteCarLaneSwitch
-for image in os.listdir("test_images/"):
-    output_img = process_image(mpimg.imread("test_images/" + image))
-    plt.imshow(output_img, cmap='Greys_r')
-    plt.show()
+# Cycle through images, process them, and save in same directory
+# Directory could be defined from cmdln or config file
+in_directory = "test_images"
+out_directory = in_directory + "_output/"
+in_directory += "/"
+for image in os.listdir(in_directory):
+    output_img = process_image(mpimg.imread(in_directory + image))
+    # Reorder color channels before saving
+    cv2.imwrite(out_directory + image,
+                cv2.cvtColor(output_img, cv2.COLOR_RGB2BGR))
