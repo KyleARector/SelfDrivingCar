@@ -55,7 +55,11 @@ def region_of_interest(img, vertices):
     return masked_image
 
 
-def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
+def calc_slope(x1, y1, x2, y2):
+    return (y2 - y1)/(x2 - x1)
+
+
+def draw_lines(img, lines, color=[255, 0, 0], thickness=5):
     """
     NOTE: this is the function you might want to use as a starting point once
     you want to average/extrapolate the line segments you detect to map
@@ -72,9 +76,42 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
     If you want to make the lines semi-transparent, think about combining
     this function with the weighted_img() function below
     """
+    right_lines_x = []
+    right_lines_y = []
+    left_lines_x = []
+    left_lines_y = []
+
     for line in lines:
         for x1, y1, x2, y2 in line:
-            cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+            # Calculate slope to determine what side the line is on
+            # Minimum length check - again?
+            # Check if no lines per side?
+            slope = (y2 - y1)/(x2 - x1)
+            if calc_slope(x1, y1, x2, y2) < 0:
+                left_lines_x.extend([x1, x2])
+                left_lines_y.extend([y1, y2])
+            else:
+                right_lines_x.extend([x1, x2])
+                right_lines_y.extend([y1, y2])
+
+    # Create best fit lines based on points from either side
+    # Left side
+    l_x = np.array(left_lines_x)
+    l_y = np.array(left_lines_y)
+    l_A = np.vstack([l_x, np.ones(len(l_x))]).T
+    l_m, l_b = np.linalg.lstsq(l_A, l_y)[0]
+    l_x_bottom = int((img.shape[0] - l_b)/l_m)
+    l_x_top = int((320-l_b)/l_m)
+    cv2.line(img, (l_x_bottom, img.shape[0]), (l_x_top, 320), color, thickness)
+    # Right side
+    r_x = np.array(right_lines_x)
+    r_y = np.array(right_lines_y)
+    r_A = np.vstack([r_x, np.ones(len(r_x))]).T
+    r_m, r_b = np.linalg.lstsq(r_A, r_y)[0]
+    r_x_bottom = int((img.shape[0] - r_b)/r_m)
+    r_x_top = int((320-r_b)/r_m)
+    cv2.line(img, (r_x_bottom, img.shape[0]), (r_x_top, 320), color, thickness)
+    # cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
@@ -155,3 +192,8 @@ for image in os.listdir(in_directory):
     # Reorder color channels before saving
     cv2.imwrite(out_directory + image,
                 cv2.cvtColor(output_img, cv2.COLOR_RGB2BGR))
+
+white_output = 'test_videos_output/solidYellowLeft.mp4'
+clip1 = VideoFileClip("test_videos/solidYellowLeft.mp4")
+white_clip = clip1.fl_image(process_image)
+white_clip.write_videofile(white_output, audio=False)
