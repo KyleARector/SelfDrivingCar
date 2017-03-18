@@ -35,7 +35,7 @@ def region_of_interest(img, vertices):
     Only keeps the region of the image defined by the polygon
     formed from `vertices`. The rest of the image is set to black.
     """
-    # defining a blank mask to start with
+    # Defining a blank mask to start with
     mask = np.zeros_like(img)
 
     # defining a 3 channel or 1 channel color to fill the mask with depending
@@ -46,7 +46,7 @@ def region_of_interest(img, vertices):
     else:
         ignore_mask_color = 255
 
-    # filling pixels inside the polygon defined by "vertices" with
+    # Filling pixels inside the polygon defined by "vertices" with
     # the fill color
     cv2.fillPoly(mask, vertices, ignore_mask_color)
 
@@ -91,7 +91,6 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
     return line_img
 
 
-# Python 3 has support for cool math symbols.
 def weighted_img(img, initial_img, α=0.8, β=1., λ=0.):
     """
     `img` is the output of the hough_lines(), An image with lines drawn on it.
@@ -113,4 +112,51 @@ def process_image(image):
     # TODO: put your pipeline here,
     # you should return the final output (image where lines are drawn on lanes)
 
+    # Get the image size
+    imshape = image.shape
+
+    # Canny parameters
+    low_threshold = 60
+    high_threshold = 180
+    blur_kernel = 5
+
+    # Image make parameters
+    vertices = np.array([[(150, imshape[0]),
+                          (450, 310),
+                          (490, 310),
+                          (900, imshape[0])]],
+                        dtype=np.int32)
+    # Hough transform parameters
+    rho = 2
+    theta = np.pi/180
+    hough_threshold = 15
+    min_line_length = 40
+    max_line_gap = 20
+
+    # # # BEGIN PIPELINE # # #
+    # Convert the image to grayscale, and apply a gaussian blur
+    gs_img = grayscale(image)
+    blur_img = gaussian_blur(gs_img, blur_kernel)
+    # Perform Canny edge detection on the blurred grayscale
+    canny_img = canny(gs_img, low_threshold, high_threshold)
+    # Mask off polygonal area
+    # Determine dynamically in the future?
+    masked_img = region_of_interest(canny_img, vertices)
+    # Retrieve lines from Hough transform
+    img_lines = hough_lines(masked_img, rho, theta, hough_threshold,
+                            min_line_length, max_line_gap)
+    result = weighted_img(img_lines, np.copy(image))
+    # # # END PIPELINE # # #
     return result
+
+
+# solidWhiteRight
+# solidWhiteCurve
+# solidYellowCurve
+# solidYellowCurve2
+# solidYellowLeft
+# whiteCarLaneSwitch
+for image in os.listdir("test_images/"):
+    output_img = process_image(mpimg.imread("test_images/" + image))
+    plt.imshow(output_img, cmap='Greys_r')
+    plt.show()
