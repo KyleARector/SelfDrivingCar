@@ -55,8 +55,27 @@ def region_of_interest(img, vertices):
     return masked_image
 
 
+# Given two points with x and y coordinates,
+# return the slope of the line between them
 def calc_slope(x1, y1, x2, y2):
     return (y2 - y1)/(x2 - x1)
+
+
+# Given the slope of a line, and the x and y coordinates of a
+# point on that line, return the y intercept for slope-intercept form
+def calc_y_intercept(x, y, m):
+    return y - m * x
+
+
+# Given the slope and y intercept of a line, as well as a y
+# value on the line, return the associated x value
+def calc_x_from_line(y, m, b):
+    return (y - b)/m
+
+
+# Given a list of values, calculate the mean
+def calc_list_avg(list):
+    return sum(list)/len(list)
 
 
 def draw_lines(img, lines, color=[255, 0, 0], thickness=5):
@@ -76,42 +95,58 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=5):
     If you want to make the lines semi-transparent, think about combining
     this function with the weighted_img() function below
     """
-    right_lines_x = []
-    right_lines_y = []
-    left_lines_x = []
-    left_lines_y = []
+    # Initialize lists to hold x and y values of the lines
+    # Would like to refactor
+    right_x1 = []
+    right_x2 = []
+    right_y1 = []
+    right_y2 = []
+    left_x1 = []
+    left_x2 = []
+    left_y1 = []
+    left_y2 = []
 
     for line in lines:
         for x1, y1, x2, y2 in line:
             # Calculate slope to determine what side the line is on
-            # Minimum length check - again?
-            # Check if no lines per side?
-            slope = (y2 - y1)/(x2 - x1)
-            if calc_slope(x1, y1, x2, y2) < 0:
-                left_lines_x.extend([x1, x2])
-                left_lines_y.extend([y1, y2])
-            else:
-                right_lines_x.extend([x1, x2])
-                right_lines_y.extend([y1, y2])
+            # Filter out approximately horizontal lines
+            # If negative slope, add points to left side
+            # If positive, add to right side
+            if calc_slope(x1, y1, x2, y2) < -.55:
+                left_x1.append(x1)
+                left_x2.append(x2)
+                left_y1.append(y1)
+                left_y2.append(y2)
+            elif calc_slope(x1, y1, x2, y2) > .55:
+                right_x1.append(x1)
+                right_x2.append(x2)
+                right_y1.append(y1)
+                right_y2.append(y2)
 
     # Create best fit lines based on points from either side
+    # Would like to refactor
     # Left side
-    l_x = np.array(left_lines_x)
-    l_y = np.array(left_lines_y)
-    l_A = np.vstack([l_x, np.ones(len(l_x))]).T
-    l_m, l_b = np.linalg.lstsq(l_A, l_y)[0]
-    l_x_bottom = int((img.shape[0] - l_b)/l_m)
-    l_x_top = int((320-l_b)/l_m)
-    cv2.line(img, (l_x_bottom, img.shape[0]), (l_x_top, 320), color, thickness)
+    l_x1 = calc_list_avg(left_x1)
+    l_x2 = calc_list_avg(left_x2)
+    l_y1 = calc_list_avg(left_y1)
+    l_y2 = calc_list_avg(left_y2)
+    l_m = calc_slope(l_x1, l_y1, l_x2, l_y2)
+    l_b = calc_y_intercept(l_x1, l_y1, l_m)
+    l_x_bottom = int(calc_x_from_line(img.shape[0], l_m, l_b))
+    l_x_top = int(calc_x_from_line(img.shape[0]*.593, l_m, l_b))
+    cv2.line(img, (l_x_bottom, img.shape[0]),
+             (l_x_top, int(img.shape[0]*.593)), color, thickness)
     # Right side
-    r_x = np.array(right_lines_x)
-    r_y = np.array(right_lines_y)
-    r_A = np.vstack([r_x, np.ones(len(r_x))]).T
-    r_m, r_b = np.linalg.lstsq(r_A, r_y)[0]
-    r_x_bottom = int((img.shape[0] - r_b)/r_m)
-    r_x_top = int((320-r_b)/r_m)
-    cv2.line(img, (r_x_bottom, img.shape[0]), (r_x_top, 320), color, thickness)
-    # cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+    r_x1 = calc_list_avg(right_x1)
+    r_x2 = calc_list_avg(right_x2)
+    r_y1 = calc_list_avg(right_y1)
+    r_y2 = calc_list_avg(right_y2)
+    r_m = calc_slope(r_x1, r_y1, r_x2, r_y2)
+    r_b = calc_y_intercept(r_x1, r_y1, r_m)
+    r_x_bottom = int(calc_x_from_line(img.shape[0], r_m, r_b))
+    r_x_top = int(calc_x_from_line(img.shape[0]*.593, r_m, r_b))
+    cv2.line(img, (r_x_bottom, img.shape[0]),
+             (r_x_top, int(img.shape[0]*.593)), color, thickness)
 
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
@@ -148,21 +183,22 @@ def process_image(image):
     imshape = image.shape
 
     # Canny parameters
-    low_threshold = 60
-    high_threshold = 180
+    low_threshold = 50
+    high_threshold = 150
     blur_kernel = 5
 
-    # Image make parameters
-    vertices = np.array([[(150, imshape[0]),
-                          (450, 320),
-                          (490, 320),
-                          (900, imshape[0])]],
+    # Image mask parameters, as a function of image size
+    vertices = np.array([[(imshape[1]*.132, imshape[0]),
+                          (imshape[1]*.469, imshape[0]*.593),
+                          (imshape[1]*.531, imshape[0]*.593),
+                          (imshape[1]*.938, imshape[0])]],
                         dtype=np.int32)
+
     # Hough transform parameters
     rho = 2
     theta = np.pi/180
     hough_threshold = 15
-    min_line_length = 40
+    min_line_length = 35
     max_line_gap = 20
 
     # # # BEGIN PIPELINE # # #
@@ -193,7 +229,18 @@ for image in os.listdir(in_directory):
     cv2.imwrite(out_directory + image,
                 cv2.cvtColor(output_img, cv2.COLOR_RGB2BGR))
 
+# Generate white line video
+white_output = 'test_videos_output/solidWhiteRight.mp4'
+clip1 = VideoFileClip("test_videos/solidWhiteRight.mp4")
+white_clip = clip1.fl_image(process_image)
+white_clip.write_videofile(white_output, audio=False)
+# Generate yellow line video
 white_output = 'test_videos_output/solidYellowLeft.mp4'
 clip1 = VideoFileClip("test_videos/solidYellowLeft.mp4")
+white_clip = clip1.fl_image(process_image)
+white_clip.write_videofile(white_output, audio=False)
+# Generate challenge video
+white_output = 'test_videos_output/challenge.mp4'
+clip1 = VideoFileClip("test_videos/challenge.mp4")
 white_clip = clip1.fl_image(process_image)
 white_clip.write_videofile(white_output, audio=False)
